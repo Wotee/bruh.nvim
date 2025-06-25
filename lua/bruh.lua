@@ -50,7 +50,20 @@ M.test = function()
 	if type(response_data) == "table" then
 		local ok2, encoded = pcall(vim.fn.json_encode, response_data)
 		if ok2 then
-			response_data = encoded
+			-- Pretty-print using jq if available
+			local handle = io.popen("jq .", "w")
+			if handle then
+				handle:write(encoded)
+				handle:close()
+				local pretty = vim.fn.system("echo " .. vim.fn.shellescape(encoded) .. " | jq .")
+				if vim.v.shell_error == 0 then
+					response_data = pretty
+				else
+					response_data = encoded -- fallback
+				end
+			else
+				response_data = encoded
+			end
 		end
 	end
 
