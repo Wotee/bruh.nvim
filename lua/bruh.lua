@@ -5,6 +5,16 @@ M.setup = function()
 	-- nothing
 end
 
+local function deep_get(tbl, ...)
+	for _, key in ipairs({ ... }) do
+		if type(tbl) ~= "table" then
+			return nil
+		end
+		tbl = tbl[key]
+	end
+	return tbl
+end
+
 M.test = function()
 	-- Get current buffer file path
 	local buf_path = vim.api.nvim_buf_get_name(0)
@@ -28,21 +38,27 @@ M.test = function()
 		return
 	end
 
-	-- Read output file
-	local file = io.open(output_file, "r")
-	if not file then
-		vim.notify("Failed to open Bruno output file", vim.log.levels.ERROR)
+	-- Read and parse JSON file
+	local lines = vim.fn.readfile(output_file)
+	local ok, parsed = pcall(vim.fn.json_decode, table.concat(lines, "\n"))
+	if not ok then
+		vim.notify("Failed to parse JSON output", vim.log.levels.ERROR)
 		return
 	end
-
-	local content = file:read("*a")
-	file:close()
-	-- jq '.[0].results[0].response.data'
+	local response_data = deep_get(parsed, 1, "results", 1, "response", "data")
+	-- If it's a table, pretty-print it
+	if type(response_data) == "table" then
+		local ok2, encoded = pcall(vim.fn.json_encode, response_data)
+		if ok2 then
+			response_data = encoded
+		end
+	end
 
 	-- Open a new buffer and display output
 	vim.cmd("new")
 	vim.cmd("setlocal buftype=nofile bufhidden=hide noswapfile")
-	vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(content, "\n"))
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(response_data, "\n"))
+	vim.cmd("setfiletype json")
 end
 
 return M
