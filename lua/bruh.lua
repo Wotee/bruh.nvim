@@ -27,12 +27,16 @@ M.test = function(env)
 	local output_file = "/tmp/bruno_output.json"
 
 	-- Run Bruno CLI using current file as the request source
+	local file_dir = vim.fn.fnamemodify(buf_path, ":h")
+	local file_name = vim.fn.fnamemodify(buf_path, ":t")
+
 	local cmd
 	if env and env ~= "" then
-		cmd = string.format("bru run %s --reporter-json %s --env %s", buf_path, output_file, env)
+		cmd = string.format("(cd %s && bru run %s --reporter-json %s --env %s)", file_dir, file_name, output_file, env)
 	else
-		cmd = string.format("bru run %s --reporter-json %s", buf_path, output_file)
+		cmd = string.format("(cd %s && bru run %s --reporter-json %s)", file_dir, file_name, output_file)
 	end
+
 	local result = os.execute(cmd)
 	if result ~= 0 then
 		vim.notify("Bru CLI failed", vim.log.levels.ERROR)
