@@ -11,6 +11,28 @@ local function deep_get(tbl, ...)
 	return tbl
 end
 
+local function find_bru_collection_root(start_dir)
+	local uv = vim.loop
+	local function exists(filepath)
+		local stat = uv.fs_stat(filepath)
+		return stat and stat.type == "file"
+	end
+
+	local dir = start_dir
+	while dir do
+		local candidate = dir .. "/collection.bru"
+		if exists(candidate) then
+			return dir
+		end
+		local parent = vim.fn.fnamemodify(dir, ":h")
+		if parent == dir then
+			break -- reached root
+		end
+		dir = parent
+	end
+	return nil
+end
+
 M.test = function(env)
 	-- Get current buffer file path
 	local buf_path = vim.api.nvim_buf_get_name(0)
@@ -30,11 +52,23 @@ M.test = function(env)
 	local file_dir = vim.fn.fnamemodify(buf_path, ":h")
 	local file_name = vim.fn.fnamemodify(buf_path, ":t")
 
+	local collection_root = find_bru_collection_root(file_dir)
+	if not collection_root then
+		vim.notify("Could not find collection.bru in parent directories", vim.log.levels.ERROR)
+		return
+	end
+
 	local cmd
 	if env and env ~= "" then
-		cmd = string.format("(cd %s && bru run %s --reporter-json %s --env %s)", file_dir, file_name, output_file, env)
+		cmd = string.format(
+			"(cd %s && bru run %s --reporter-json %s --env %s)",
+			collection_root,
+			file_name,
+			output_file,
+			env
+		)
 	else
-		cmd = string.format("(cd %s && bru run %s --reporter-json %s)", file_dir, file_name, output_file)
+		cmd = string.format("(cd %s && bru run %s --reporter-json %s)", collection_root, file_name, output_file)
 	end
 
 	local result = os.execute(cmd)
