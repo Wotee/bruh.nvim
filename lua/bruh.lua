@@ -1,10 +1,6 @@
 print("loaded bruh.nvim")
 local M = {}
 
-M.setup = function()
-	-- nothing
-end
-
 local function deep_get(tbl, ...)
 	for _, key in ipairs({ ... }) do
 		if type(tbl) ~= "table" then
@@ -37,7 +33,6 @@ M.test = function(env)
 	else
 		cmd = string.format("bru run %s --reporter-json %s", buf_path, output_file)
 	end
-	print(cmd)
 	local result = os.execute(cmd)
 	if result ~= 0 then
 		vim.notify("Bru CLI failed", vim.log.levels.ERROR)
@@ -78,6 +73,16 @@ M.test = function(env)
 	vim.cmd("setlocal buftype=nofile bufhidden=hide noswapfile")
 	vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(response_data, "\n"))
 	vim.cmd("setfiletype json")
+end
+
+M.setup = function()
+	vim.api.nvim_create_user_command("Bru", function(opts)
+		M.test(opts.args)
+	end, {
+		nargs = "?",
+		complete = nil, -- TODO: Add later for autocompletion
+		desc = "Run bru request in current buffer (optionally with environment)",
+	})
 end
 
 return M
