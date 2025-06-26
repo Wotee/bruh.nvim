@@ -33,6 +33,34 @@ local function find_bru_collection_root(start_dir)
 	return nil
 end
 
+local function complete_env(arg_lead, cmd_line, cursor_pos)
+	local buf_path = vim.api.nvim_buf_get_name(0)
+	if buf_path == "" then
+		return {}
+	end
+
+	local file_dir = vim.fn.fnamemodify(buf_path, ":h")
+	local collection_root = find_bru_collection_root(file_dir)
+	if not collection_root then
+		return {}
+	end
+
+	local env_dir = collection_root .. "/environments"
+	if vim.fn.isdirectory(env_dir) == 0 then
+		return {}
+	end
+
+	local env_files = vim.fn.glob(env_dir .. "/*.bru", false, true)
+	local env_names = {}
+	for _, f in ipairs(env_files) do
+		local name = vim.fn.fnamemodify(f, ":t:r") -- remove path and extension
+		if vim.startswith(name, arg_lead) then
+			table.insert(env_names, name)
+		end
+	end
+	return env_names
+end
+
 M.test = function(env)
 	-- Get current buffer file path
 	local buf_path = vim.api.nvim_buf_get_name(0)
@@ -118,7 +146,7 @@ M.setup = function()
 		M.test(opts.args)
 	end, {
 		nargs = "?",
-		complete = nil, -- TODO: Add later for autocompletion
+		complete = complete_env,
 		desc = "Run bru request in current buffer (optionally with environment)",
 	})
 end
