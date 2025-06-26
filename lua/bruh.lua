@@ -61,7 +61,7 @@ local function complete_env(arg_lead, cmd_line, cursor_pos)
 	return env_names
 end
 
-M.test = function(env)
+M.run_bruno_request = function(env)
 	-- Get current buffer file path
 	local buf_path = vim.api.nvim_buf_get_name(0)
 	if buf_path == "" then
@@ -143,7 +143,7 @@ end
 
 M.setup = function()
 	vim.api.nvim_create_user_command("Bru", function(opts)
-		M.test(opts.args)
+		M.run_bruno_request(opts.args)
 	end, {
 		nargs = "?",
 		complete = complete_env,
