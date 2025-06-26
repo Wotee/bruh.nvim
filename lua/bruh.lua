@@ -15,7 +15,7 @@ local function deep_get(tbl, ...)
 	return tbl
 end
 
-M.test = function()
+M.test = function(env)
 	-- Get current buffer file path
 	local buf_path = vim.api.nvim_buf_get_name(0)
 	if buf_path == "" then
@@ -31,7 +31,13 @@ M.test = function()
 	local output_file = "/tmp/bruno_output.json"
 
 	-- Run Bruno CLI using current file as the request source
-	local cmd = string.format("bru run %s --reporter-json %s", buf_path, output_file)
+	local cmd
+	if env and env ~= "" then
+		cmd = string.format("bru run %s --reporter-json %s --env %s", buf_path, output_file, env)
+	else
+		cmd = string.format("bru run %s --reporter-json %s", buf_path, output_file)
+	end
+	print(cmd)
 	local result = os.execute(cmd)
 	if result ~= 0 then
 		vim.notify("Bru CLI failed", vim.log.levels.ERROR)
