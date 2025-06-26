@@ -1,5 +1,7 @@
-print("loaded bruh.nvim")
 local M = {}
+
+-- Store confit options for future use
+local config = {}
 
 local function deep_get(tbl, ...)
 	for _, key in ipairs({ ... }) do
@@ -141,7 +143,10 @@ M.run_bruno_request = function(env)
 	vim.cmd("setfiletype json")
 end
 
-M.setup = function()
+M.setup = function(user_config)
+	config = vim.tbl_deep_extend("force", {}, {
+		-- Default config (if needed)
+	}, user_config or {})
 	vim.api.nvim_create_user_command("Bru", function(opts)
 		M.run_bruno_request(opts.args)
 	end, {
