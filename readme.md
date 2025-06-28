@@ -3,6 +3,8 @@
 A Neovim plugin to run [Bruno CLI](https://www.usebruno.com/) requests directly from your editor, with optional environment support and JSON pretty-printing via `jq`.
 
 ---
+![Demo](./demo.gif)
+---
 
 ## Prerequisites
 
