@@ -122,18 +122,11 @@ M.run_bruno_request = function(env)
 		local ok2, encoded = pcall(vim.fn.json_encode, response_data)
 		if ok2 then
 			-- Pretty-print using jq if available
-			local handle = io.popen("jq .", "w")
-			if handle then
-				handle:write(encoded)
-				handle:close()
-				local pretty = vim.fn.system("echo " .. vim.fn.shellescape(encoded) .. " | jq .")
-				if vim.v.shell_error == 0 then
-					response_data = pretty
-				else
-					response_data = encoded -- fallback
-				end
+			local pretty = vim.fn.system({ "jq", "." }, encoded)
+			if vim.v.shell_error == 0 then
+				response_data = pretty
 			else
-				response_data = encoded
+				response_data = encoded -- fallback
 			end
 		end
 	end
