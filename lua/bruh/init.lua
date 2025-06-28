@@ -91,14 +91,19 @@ M.run_bruno_request = function(env)
 	local cmd
 	if env and env ~= "" then
 		cmd = string.format(
-			"(cd '%s' && bru run '%s' --reporter-json '%s' --env '%s')",
+			"(cd '%s' && bru run '%s' --reporter-json '%s' --env '%s' > /dev/null)",
 			collection_root,
 			file_name,
 			output_file,
 			env
 		)
 	else
-		cmd = string.format("(cd %s && bru run %s --reporter-json %s)", collection_root, file_name, output_file)
+		cmd = string.format(
+			"(cd %s && bru run %s --reporter-json %s > /dev/null)",
+			collection_root,
+			file_name,
+			output_file
+		)
 	end
 
 	local result = os.execute(cmd)
