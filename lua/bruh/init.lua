@@ -115,6 +115,8 @@ M.run_bruno_request = function(env)
 		return
 	end
 	local response_data = deep_get(parsed, 1, "results", 1, "response", "data")
+	local response_status_code = deep_get(parsed, 1, "results", 1, "response", "status")
+	local response_status_text = deep_get(parsed, 1, "results", 1, "response", "statusText")
 	-- If it's a table, pretty-print it
 	if type(response_data) == "table" then
 		local ok2, encoded = pcall(vim.fn.json_encode, response_data)
@@ -139,6 +141,7 @@ M.run_bruno_request = function(env)
 	-- Open a new buffer and display output
 	vim.cmd("new")
 	vim.cmd("setlocal buftype=nofile bufhidden=hide noswapfile")
+	vim.cmd(string.format("file %d %s", response_status_code, response_status_text))
 	vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(response_data, "\n"))
 	vim.cmd("setfiletype json")
 end
