@@ -22,7 +22,7 @@ local function find_bru_collection_root(start_dir)
 
 	local dir = start_dir
 	while dir do
-		local candidate = dir .. "/collection.bru"
+		local candidate = dir .. "/bruno.json"
 		if exists(candidate) then
 			return dir
 		end
