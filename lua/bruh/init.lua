@@ -15,6 +15,8 @@ end
 
 local function find_bru_collection_root(start_dir)
 	local uv = vim.loop
+	local root_markers = { "bruno.json", "opencollection.yml" }
+
 	local function exists(filepath)
 		local stat = uv.fs_stat(filepath)
 		return stat and stat.type == "file"
@@ -22,9 +24,11 @@ local function find_bru_collection_root(start_dir)
 
 	local dir = start_dir
 	while dir do
-		local candidate = dir .. "/bruno.json"
-		if exists(candidate) then
-			return dir
+		for _, marker in ipairs(root_markers) do
+			local candidate = dir .. "/" .. marker
+			if exists(candidate) then
+				return dir
+			end
 		end
 		local parent = vim.fn.fnamemodify(dir, ":h")
 		if parent == dir then
@@ -84,14 +88,14 @@ M.run_bruno_request = function(env)
 
 	local collection_root = find_bru_collection_root(file_dir)
 	if not collection_root then
-		vim.notify("Could not find collection.bru in parent directories", vim.log.levels.ERROR)
+		vim.notify("Could not find bruno.json or opencollection.yml in parent directories", vim.log.levels.ERROR)
 		return
 	end
 
 	local cmd
 	if env and env ~= "" then
 		cmd = string.format(
-			"(cd '%s' && bru run '%s' --reporter-json '%s' --env '%s' > /dev/null)",
+			"(cd '%s' && bru run '%s' --output '%s' --format json --env '%s' > /dev/null)",
 			collection_root,
 			file_name,
 			output_file,
@@ -99,7 +103,7 @@ M.run_bruno_request = function(env)
 		)
 	else
 		cmd = string.format(
-			"(cd %s && bru run %s --reporter-json %s > /dev/null)",
+			"(cd '%s' && bru run '%s' --output '%s' --format json > /dev/null)",
 			collection_root,
 			file_name,
 			output_file
