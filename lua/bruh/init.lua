@@ -1,6 +1,6 @@
 local M = {}
 
--- Store confit options for future use
+-- Store config options for future use
 local config = {}
 
 local function deep_get(tbl, ...)
@@ -42,21 +42,25 @@ end
 local function complete_env(arg_lead, cmd_line, cursor_pos)
 	local buf_path = vim.api.nvim_buf_get_name(0)
 	if buf_path == "" then
+		vim.notify("Bufpath is empty", vim.log.levels.ERROR)
 		return {}
 	end
 
 	local file_dir = vim.fn.fnamemodify(buf_path, ":h")
 	local collection_root = find_bru_collection_root(file_dir)
 	if not collection_root then
+		vim.notify("Couldn't find collection root", vim.log.levels.ERROR)
 		return {}
 	end
 
 	local env_dir = collection_root .. "/environments"
 	if vim.fn.isdirectory(env_dir) == 0 then
+		vim.notify("Empty environments directory", vim.log.levels.ERROR)
 		return {}
 	end
 
-	local env_files = vim.fn.glob(env_dir .. "/*.bru", false, true)
+	local env_files = vim.fn.glob(env_dir .. "/*.{bru,yml}", false, true)
+
 	local env_names = {}
 	for _, f in ipairs(env_files) do
 		local name = vim.fn.fnamemodify(f, ":t:r") -- remove path and extension

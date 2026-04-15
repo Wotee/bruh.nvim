@@ -38,7 +38,7 @@ Open a Bruno request file (usually with .bru extension), then run:
 
 The plugin will:
 
-Find the root of the Bruno collection by locating collection.bru.
+Find the root of the Bruno collection by locating bruno.json, opencollection.yml, or collection.bru.
 
 Run the bru CLI command in that folder.
 
