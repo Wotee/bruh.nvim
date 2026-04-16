@@ -2,6 +2,28 @@ local M = {}
 
 -- Store config options for future use
 local config = {}
+local active_job_id = nil
+local running_notification = nil
+
+local function clear_running_notification()
+	if running_notification ~= nil then
+		pcall(vim.notify, "", vim.log.levels.INFO, {
+			replace = running_notification,
+			timeout = 10,
+			hide_from_history = true,
+			title = "Bru",
+		})
+		running_notification = nil
+	end
+
+	local ok_notify, notify = pcall(require, "notify")
+	if ok_notify and type(notify.dismiss) == "function" then
+		pcall(notify.dismiss, { pending = true, silent = true })
+	end
+
+	pcall(vim.api.nvim_echo, { { "", "" } }, false, {})
+	vim.cmd("redraw")
+end
 
 local function deep_get(tbl, ...)
 	for _, key in ipairs({ ... }) do
@@ -72,6 +94,11 @@ local function complete_env(arg_lead, cmd_line, cursor_pos)
 end
 
 M.run_bruno_request = function(env)
+	if active_job_id then
+		vim.notify("A Bru request is already running", vim.log.levels.WARN)
+		return
+	end
+
 	-- Get current buffer file path
 	local buf_path = vim.api.nvim_buf_get_name(0)
 	if buf_path == "" then
@@ -84,7 +111,7 @@ M.run_bruno_request = function(env)
 	end
 
 	-- Output file path
-	local output_file = "/tmp/bruno_output.json"
+	local output_file = vim.fn.tempname() .. ".json"
 
 	-- Run Bruno CLI using current file as the request source
 	local file_dir = vim.fn.fnamemodify(buf_path, ":h")
@@ -96,78 +123,121 @@ M.run_bruno_request = function(env)
 		return
 	end
 
-	local cmd
+	local cmd = { "bru", "run", file_name, "--output", output_file, "--format", "json" }
 	if env and env ~= "" then
-		cmd = string.format(
-			"(cd '%s' && bru run '%s' --output '%s' --format json --env '%s' > /dev/null)",
-			collection_root,
-			file_name,
-			output_file,
-			env
-		)
-	else
-		cmd = string.format(
-			"(cd '%s' && bru run '%s' --output '%s' --format json > /dev/null)",
-			collection_root,
-			file_name,
-			output_file
-		)
+		table.insert(cmd, "--env")
+		table.insert(cmd, env)
 	end
 
-	local result = os.execute(cmd)
-	if result ~= 0 then
-		vim.notify("Bru CLI failed", vim.log.levels.ERROR)
-		return
-	end
+	local stderr_lines = {}
 
-	-- Read and parse JSON file
-	local lines = vim.fn.readfile(output_file)
-	local ok, parsed = pcall(vim.fn.json_decode, table.concat(lines, "\n"))
-	if not ok then
-		vim.notify("Failed to parse JSON output", vim.log.levels.ERROR)
-		return
-	end
-	local response_data = deep_get(parsed, 1, "results", 1, "response", "data")
-	local response_status_code = deep_get(parsed, 1, "results", 1, "response", "status")
-	local response_status_text = deep_get(parsed, 1, "results", 1, "response", "statusText")
-	-- If it's a table, pretty-print it
-	if type(response_data) == "table" then
-		local ok2, encoded = pcall(vim.fn.json_encode, response_data)
-		if ok2 then
-			-- Pretty-print using jq if available
-			local pretty = vim.fn.system({ "jq", "." }, encoded)
-			if vim.v.shell_error == 0 then
-				response_data = pretty
-			else
-				response_data = encoded -- fallback
+	active_job_id = vim.fn.jobstart(cmd, {
+		cwd = collection_root,
+		stdout_buffered = true,
+		stderr_buffered = true,
+		on_stderr = function(_, data)
+			if type(data) ~= "table" then
+				return
 			end
-		end
+			for _, line in ipairs(data) do
+				if line ~= "" then
+					table.insert(stderr_lines, line)
+				end
+			end
+		end,
+		on_exit = vim.schedule_wrap(function(_, code)
+			active_job_id = nil
+
+			if code ~= 0 then
+				clear_running_notification()
+				local message = "Bru CLI failed"
+				if #stderr_lines > 0 then
+					message = message .. ": " .. stderr_lines[#stderr_lines]
+				end
+				vim.notify(message, vim.log.levels.ERROR)
+				vim.fn.delete(output_file)
+				return
+			end
+
+			-- Read and parse JSON file
+			local ok_read, lines = pcall(vim.fn.readfile, output_file)
+			vim.fn.delete(output_file)
+			if not ok_read then
+				vim.notify("Failed to read Bru output", vim.log.levels.ERROR)
+				return
+			end
+
+			local ok_decode, parsed = pcall(vim.fn.json_decode, table.concat(lines, "\n"))
+			if not ok_decode then
+				vim.notify("Failed to parse JSON output", vim.log.levels.ERROR)
+				return
+			end
+
+			local response_data = deep_get(parsed, 1, "results", 1, "response", "data")
+			local response_status_code = deep_get(parsed, 1, "results", 1, "response", "status")
+			local response_status_text = deep_get(parsed, 1, "results", 1, "response", "statusText")
+
+			-- If it's a table, pretty-print it
+			if type(response_data) == "table" then
+				local ok2, encoded = pcall(vim.fn.json_encode, response_data)
+				if ok2 then
+					-- Pretty-print using jq if available
+					local pretty = vim.fn.system({ "jq", "." }, encoded)
+					if vim.v.shell_error == 0 then
+						response_data = pretty
+					else
+						response_data = encoded -- fallback
+					end
+				end
+			elseif type(response_data) ~= "string" then
+				response_data = response_data == nil and "" or tostring(response_data)
+			end
+
+			-- Reuse existing response buffer if it already exists
+			local response_buf_name =
+				string.format("%s %s", tostring(response_status_code or ""), tostring(response_status_text or ""))
+			response_buf_name = vim.trim(response_buf_name)
+			if response_buf_name == "" then
+				response_buf_name = "Bru Response"
+			end
+
+			clear_running_notification()
+
+			local response_bufnr = vim.fn.bufnr(response_buf_name)
+			if response_bufnr ~= -1 then
+				local winid = vim.fn.bufwinid(response_bufnr)
+				if winid ~= -1 then
+					vim.api.nvim_set_current_win(winid)
+				else
+					vim.cmd("new")
+					vim.api.nvim_win_set_buf(0, response_bufnr)
+				end
+			else
+				vim.cmd("new")
+				vim.api.nvim_buf_set_name(0, response_buf_name)
+			end
+
+			vim.cmd("setlocal buftype=nofile bufhidden=hide noswapfile")
+			vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(response_data, "\n"))
+			vim.cmd("setfiletype json")
+		end),
+	})
+
+	if active_job_id <= 0 then
+		active_job_id = nil
+		clear_running_notification()
+		vim.notify("Failed to start Bru CLI", vim.log.levels.ERROR)
+		vim.fn.delete(output_file)
+		return
 	end
 
-	-- Reuse existing response buffer if it already exists
-	local response_buf_name = string.format("%s %s", tostring(response_status_code or ""), tostring(response_status_text or ""))
-	response_buf_name = vim.trim(response_buf_name)
-	if response_buf_name == "" then
-		response_buf_name = "Bru Response"
+	local ok_notify, notification = pcall(vim.notify, "Running Bru request...", vim.log.levels.INFO, {
+		title = "Bru",
+		timeout = false,
+	})
+	if ok_notify then
+		running_notification = notification
 	end
-
-	local response_bufnr = vim.fn.bufnr(response_buf_name)
-	if response_bufnr ~= -1 then
-		local winid = vim.fn.bufwinid(response_bufnr)
-		if winid ~= -1 then
-			vim.api.nvim_set_current_win(winid)
-		else
-			vim.cmd("new")
-			vim.api.nvim_win_set_buf(0, response_bufnr)
-		end
-	else
-		vim.cmd("new")
-		vim.api.nvim_buf_set_name(0, response_buf_name)
-	end
-
-	vim.cmd("setlocal buftype=nofile bufhidden=hide noswapfile")
-	vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(response_data or "", "\n"))
-	vim.cmd("setfiletype json")
 end
 
 M.setup = function(user_config)
