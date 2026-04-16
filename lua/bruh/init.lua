@@ -144,11 +144,29 @@ M.run_bruno_request = function(env)
 		end
 	end
 
-	-- Open a new buffer and display output
-	vim.cmd("new")
+	-- Reuse existing response buffer if it already exists
+	local response_buf_name = string.format("%s %s", tostring(response_status_code or ""), tostring(response_status_text or ""))
+	response_buf_name = vim.trim(response_buf_name)
+	if response_buf_name == "" then
+		response_buf_name = "Bru Response"
+	end
+
+	local response_bufnr = vim.fn.bufnr(response_buf_name)
+	if response_bufnr ~= -1 then
+		local winid = vim.fn.bufwinid(response_bufnr)
+		if winid ~= -1 then
+			vim.api.nvim_set_current_win(winid)
+		else
+			vim.cmd("new")
+			vim.api.nvim_win_set_buf(0, response_bufnr)
+		end
+	else
+		vim.cmd("new")
+		vim.api.nvim_buf_set_name(0, response_buf_name)
+	end
+
 	vim.cmd("setlocal buftype=nofile bufhidden=hide noswapfile")
-	vim.cmd(string.format("file %d %s", response_status_code, response_status_text))
-	vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(response_data, "\n"))
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(response_data or "", "\n"))
 	vim.cmd("setfiletype json")
 end
 
