@@ -36,6 +36,8 @@ Open a Bruno request file (usually with .bru extension), then run:
 
 `:Bru <EnvName>` — runs the request using the environment named <EnvName>.
 
+`:BruCancel` — cancels the currently running request.
+
 The plugin will:
 
 Find the root of the Bruno collection by locating bruno.json, opencollection.yml, or collection.bru.

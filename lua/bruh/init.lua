@@ -3,6 +3,7 @@ local M = {}
 -- Store config options for future use
 local config = {}
 local active_job_id = nil
+local cancel_requested = false
 local running_notification = nil
 
 local function clear_running_notification()
@@ -98,6 +99,7 @@ M.run_bruno_request = function(env)
 		vim.notify("A Bru request is already running", vim.log.levels.WARN)
 		return
 	end
+	cancel_requested = false
 
 	-- Get current buffer file path
 	local buf_path = vim.api.nvim_buf_get_name(0)
@@ -146,7 +148,14 @@ M.run_bruno_request = function(env)
 			end
 		end,
 		on_exit = vim.schedule_wrap(function(_, code)
+			local was_cancelled = cancel_requested
 			active_job_id = nil
+			cancel_requested = false
+
+			if was_cancelled then
+				vim.fn.delete(output_file)
+				return
+			end
 
 			if code ~= 0 then
 				clear_running_notification()
@@ -225,6 +234,7 @@ M.run_bruno_request = function(env)
 
 	if active_job_id <= 0 then
 		active_job_id = nil
+		cancel_requested = false
 		clear_running_notification()
 		vim.notify("Failed to start Bru CLI", vim.log.levels.ERROR)
 		vim.fn.delete(output_file)
@@ -240,6 +250,25 @@ M.run_bruno_request = function(env)
 	end
 end
 
+M.cancel_bruno_request = function()
+	if not active_job_id then
+		vim.notify("No Bru request is currently running", vim.log.levels.INFO)
+		return
+	end
+
+	local job_id = active_job_id
+	cancel_requested = true
+	clear_running_notification()
+
+	local stopped = vim.fn.jobstop(job_id)
+	if stopped == 1 then
+		vim.notify("Bru request cancelled", vim.log.levels.INFO)
+	else
+		cancel_requested = false
+		vim.notify("Failed to cancel Bru request", vim.log.levels.WARN)
+	end
+end
+
 M.setup = function(user_config)
 	config = vim.tbl_deep_extend("force", {}, {
 		-- Default config (if needed)
@@ -250,6 +279,11 @@ M.setup = function(user_config)
 		nargs = "?",
 		complete = complete_env,
 		desc = "Run bru request in current buffer (optionally with environment)",
+	})
+	vim.api.nvim_create_user_command("BruCancel", function()
+		M.cancel_bruno_request()
+	end, {
+		desc = "Cancel the running bru request",
 	})
 end
 
